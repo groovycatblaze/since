@@ -1,0 +1,50 @@
+# Stateful dependencies only, for now.
+#
+# The API runs natively in the venv during development: a rebuild loop on
+# every code change would cost hours across a 48-hour build. An `api` service
+# gets added before submission so a reviewer can `docker compose up` on a
+# clean clone and get a working system.
+#
+# Postgres and Redis are containerised from the start because they are exactly
+# what is painful to install reproducibly, and because "works on my machine"
+# is the single most common reason a reviewer cannot run a submission.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: since_postgres
+    environment:
+      POSTGRES_USER: since
+      POSTGRES_PASSWORD: since_dev_password
+      POSTGRES_DB: since
+    ports:
+      - "5433:5432"   # 5433 on the host: avoids colliding with any local Postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db:/docker-entrypoint-initdb.d:ro   # *.sql here run on first init
+    healthcheck:
+      # Compose waits for this before anything depends on the DB. Without it,
+      # the API races the database on cold start and fails intermittently —
+      # the classic "works the second time" bug.
+      test: ["CMD-SHELL", "pg_isready -U since -d since"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: since_redis
+    ports:
+      - "6380:6379"   # 6380 on the host, same reasoning as above
+    # Cache only: every key here is reconstructible from Postgres. No AOF, no
+    # RDB. Losing Redis costs one refresh cycle, never user data — which is
+    # the property that lets us treat it as disposable under failure.
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:
