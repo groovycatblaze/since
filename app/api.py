@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
@@ -70,7 +71,7 @@ async def lifespan(app: FastAPI):
     yield
     close_pool()
 
-
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 app = FastAPI(title="Since", version="1.0", lifespan=lifespan)
 
 # The frontend runs on a different port in development. Locked to localhost
@@ -137,7 +138,16 @@ def clock(at: str | None = Query(default=None)) -> datetime:
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+@app.get("/", include_in_schema=False)
+def index():
+    """The frontend is one static file served by the API.
 
+    No bundler, no node_modules, no second dev server, no CORS in production.
+    For a home screen that is one list with three sections, a build toolchain
+    would be weight without a job -- and the whole product deploys as a single
+    artifact.
+    """
+    return FileResponse(STATIC_DIR / "index.html")
 @app.get("/api/health")
 def get_health():
     try:

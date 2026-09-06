@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
-from bisect import bisect_right
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -75,6 +75,17 @@ class Provider(Protocol):
         """Never raises. Failures come back as Quote(status=...), because a
         provider outage is an expected operating condition, not an exception.
         A partial result is normal: some symbols succeed, others do not."""
+        ...
+
+    def history(self, symbol: str, start: datetime, end: datetime,
+                points: int = 32) -> list[float]:
+        """The price path between two moments, downsampled to `points`.
+
+        Downsampling happens HERE, not in the browser: a four-day window is
+        ~1,500 one-minute bars per symbol, and shipping all of them so the UI
+        can draw a 190px line would make the payload grow without bound as
+        history accumulates. The API returns what the picture needs.
+        """
         ...
 
 
@@ -172,6 +183,30 @@ class ReplayProvider:
         return out
 
 
+    def history(self, symbol: str, start: datetime, end: datetime,
+                points: int = 32) -> list[float]:
+        timeline = self._timelines.get(symbol)
+        if not timeline or end <= start:
+            return []
+
+        stamps = [ts for ts, _ in timeline]
+        lo = bisect_left(stamps, start)
+        hi = bisect_right(stamps, end)
+        window = timeline[lo:hi]
+        if len(window) < 2:
+            return []
+
+        # Even stride, always keeping the last bar: the final point is the
+        # current price, and dropping it would make the line disagree with the
+        # number printed next to it.
+        step = max(len(window) // points, 1)
+        sampled = [rec["price"] for _, rec in window[::step]]
+        last = window[-1][1]["price"]
+        if sampled[-1] != last:
+            sampled.append(last)
+        return [p for p in sampled if p]
+
+
 class LiveProvider:
     """yfinance. Unofficial, rate-limited, and occasionally wrong.
 
@@ -226,3 +261,15 @@ class LiveProvider:
                 out[symbol] = Quote(symbol, None, None, now, now,
                                     self.name, status="NO_DATA")
         return out
+
+    def history(self, symbol: str, start: datetime, end: datetime,
+                points: int = 32) -> list[float]:
+        """Not implemented against the provider.
+
+        In LIVE mode the price path is whatever we have persisted in
+        market_observations, which is a function of how long the service has
+        been running -- so the caller reads it from the database rather than
+        asking yfinance to re-download intraday history on every request.
+        Returning [] here means "ask elsewhere", not "no movement".
+        """
+        return []

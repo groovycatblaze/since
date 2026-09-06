@@ -189,14 +189,23 @@ class MarketService:
             is_new=is_new,
         )
 
-        return _item(row, score(obs, baseline, user, THRESHOLDS), symbol)
+        # The price path SINCE THE USER LAST LOOKED. Not since the open, not
+        # the last N days -- the exact window they missed. Drawing the window
+        # they were away for is what makes "memory" visible instead of being
+        # something a reviewer has to read about.
+        spark_from = acknowledged_at or row["added_at"]
+        spark = self.provider.history(symbol, spark_from, now)
+
+        return _item(row, score(obs, baseline, user, THRESHOLDS), symbol,
+                     spark=spark)
 
 
 def _empty_tiers() -> dict[str, list]:
     return {t.value: [] for t in Tier}
 
 
-def _item(row: dict, s: Score, symbol: str, note: str | None = None) -> dict:
+def _item(row: dict, s: Score, symbol: str, note: str | None = None,
+          spark: list[float] | None = None) -> dict:
     """Shape the API response.
 
     Reasons are emitted as structured objects with the message already
@@ -217,6 +226,9 @@ def _item(row: dict, s: Score, symbol: str, note: str | None = None) -> dict:
         "freshness": s.freshness.value,
         "scored": s.scored,
         "as_of": row["exchange_time"].isoformat() if row["exchange_time"] else None,
+        # Rounded before serialising: four decimals of a rupee carry no
+        # information for a 190px line and inflate every payload.
+        "spark": [round(p, 2) for p in spark] if spark else [],
         "threshold_price": float(row["threshold_price"])
             if row["threshold_price"] else None,
         "reasons": [

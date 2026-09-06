@@ -6,163 +6,184 @@
 <title>Since — what changed while you were away</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   /* Since — design notes
      ---------------------
-     Every watchlist opens with a grid of tickers and red/green numbers. This
-     product is not a dashboard; it is a report from an absence. So the hero is
-     a SENTENCE, set large in a serif, stating the verdict. The list beneath it
-     stays quiet.
+     One typeface (Manrope), hierarchy from weight and size alone. No serif
+     display face: fintech products do not use them, and a serif over a warm
+     background is the commonest signature of generated design.
 
-     The one bold element is the range gauge on each row: a track with ticks at
-     1x and 2x a stock's normal daily movement, and a bar showing where this
-     move actually falls. It makes volatility normalisation legible at a glance
-     without a word of explanation.
+     Two devices carry the whole product, and both are data rather than
+     decoration:
 
-     Palette is market red and green, desaturated. The job of this product is
-     to REDUCE urgency, so it should not look like a trading terminal. */
+     1. THE SPARKLINE is the price path since the user last acknowledged --
+        not since the open, not the last N days. It draws the exact window
+        they were away for, so "memory" is something you see rather than
+        something you read about.
+
+     2. THE RANGE BAR places this move against ticks at the real tier
+        thresholds (1.5x and 2.0x a stock's own normal daily movement). It
+        makes volatility normalisation legible at a glance.
+
+     Motion appears only where it answers an action: rows settle when the
+     clock moves, so you can see what re-ranked. */
   :root {
-    --paper:#F6F7F5; --card:#FFFFFF; --rule:#E3E7E3;
-    --ink:#16201C; --muted:#5C6B64; --faint:#8E9A94;
-    --attention:#B4342A; --changed:#A66A16; --quiet:#3F7D5E;
-    --up:#2A7D4F; --down:#B4342A; --accent:#1F4B3F;
-    --serif:"Instrument Serif", Georgia, serif;
-    --sans:"Archivo", -apple-system, "Segoe UI", sans-serif;
+    --bg:#FFFFFF; --sub:#F4F7F5; --rule:#E8EDEA;
+    --ink:#0F1E1A; --muted:#5A6B64; --faint:#8FA099;
+    --green:#00B386; --green-deep:#00875F; --green-wash:#E6F7F1;
+    --red:#E33E3E; --red-wash:#FDECEC;
+    --amber:#E08700; --amber-wash:#FEF5E7;
+    --sans:"Manrope", -apple-system, "Segoe UI", sans-serif;
   }
   * { box-sizing:border-box; }
   html { -webkit-text-size-adjust:100%; }
   body {
-    margin:0; background:var(--paper); color:var(--ink); font-family:var(--sans);
+    margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
     font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
     font-variant-numeric:tabular-nums;
   }
-  .wrap { max-width:720px; margin:0 auto; padding:38px 22px 90px; }
-  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:3px; }
-  @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
+  .wrap { max-width:760px; margin:0 auto; padding:32px 22px 90px; }
+  :focus-visible { outline:2px solid var(--green-deep); outline-offset:2px; border-radius:4px; }
+  @media (prefers-reduced-motion:reduce) {
+    *, *::before, *::after { animation:none !important; transition:none !important; }
+  }
 
   /* ---- masthead ---- */
-  .mast { display:flex; align-items:baseline; gap:10px; margin-bottom:34px; }
-  .mark { font-family:var(--serif); font-size:25px; line-height:1; letter-spacing:-.2px; }
-  .mark em { font-style:italic; }
+  .mast { display:flex; align-items:center; gap:11px; margin-bottom:30px; }
+  .logo {
+    width:26px; height:26px; border-radius:8px; background:var(--green);
+    display:grid; place-items:center; flex:none;
+  }
+  .logo svg { display:block; }
+  .mark { font-size:19px; font-weight:800; letter-spacing:-.5px; }
   .mode {
-    font-size:11px; color:var(--faint); border:1px solid var(--rule);
-    border-radius:100px; padding:2px 9px; margin-left:auto; white-space:nowrap;
+    margin-left:auto; font-size:11.5px; font-weight:500; color:var(--green-deep);
+    background:var(--green-wash); border-radius:100px; padding:4px 11px; white-space:nowrap;
   }
 
-  /* ---- the verdict: the one loud thing on the page ---- */
+  /* ---- verdict: the one loud thing ---- */
   .verdict {
-    font-family:var(--serif); font-size:36px; line-height:1.22; letter-spacing:-.4px;
-    margin:0 0 10px; max-width:19ch; font-weight:400;
+    font-size:33px; font-weight:800; line-height:1.18; letter-spacing:-1.1px;
+    margin:0 0 9px; max-width:17ch;
   }
-  .verdict .n { font-style:italic; }
-  .verdict.calm { color:var(--quiet); }
-  .since { color:var(--muted); font-size:14px; margin:0 0 4px; max-width:60ch; }
-  .stamp { color:var(--faint); font-size:12.5px; margin:0 0 30px; }
+  .verdict .hit { color:var(--red); }
+  .verdict.calm { color:var(--green-deep); }
+  .since { color:var(--muted); font-size:14.5px; margin:0 0 3px; max-width:58ch; }
+  .stamp { color:var(--faint); font-size:12.5px; margin:0 0 26px; }
 
   /* ---- controls ---- */
-  .bar {
-    display:flex; gap:8px; align-items:center; flex-wrap:wrap;
-    padding:13px 0; border-top:1px solid var(--rule);
-  }
-  .bar.last { border-bottom:1px solid var(--rule); }
-  input, button {
-    font-family:var(--sans); font-size:14px; color:var(--ink);
-  }
+  .panel { background:var(--sub); border-radius:12px; padding:13px; margin-bottom:8px; }
+  .bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .bar + .bar { margin-top:9px; }
+  input, button { font-family:var(--sans); font-size:14px; color:var(--ink); }
   input[type=text], input[type=number], input[type=datetime-local] {
-    padding:7px 10px; border:1px solid var(--rule); border-radius:5px; background:var(--card);
+    padding:8px 11px; border:1px solid var(--rule); border-radius:8px; background:var(--bg);
   }
   input[type=text] { flex:1; min-width:150px; }
-  input[type=number] { width:132px; }
+  input[type=number] { width:130px; }
   button {
-    padding:7px 13px; border-radius:5px; border:1px solid var(--rule);
-    background:var(--card); cursor:pointer; transition:background .12s ease;
+    padding:8px 14px; border-radius:8px; border:1px solid var(--rule);
+    background:var(--bg); cursor:pointer; font-weight:500;
+    transition:background .14s ease, border-color .14s ease;
   }
-  button:hover { background:#EFF2EF; }
-  button.go { background:var(--accent); color:#fff; border-color:var(--accent); }
-  button.go:hover { background:#17392F; }
-  button:disabled { opacity:.5; cursor:not-allowed; }
-  .lbl { font-size:13px; color:var(--muted); }
-  .note { font-size:12.5px; color:var(--faint); padding:10px 0 0; max-width:62ch; }
+  button:hover { border-color:#CFDAD5; background:#FBFDFC; }
+  button.go {
+    background:var(--green); color:#fff; border-color:var(--green); font-weight:600;
+  }
+  button.go:hover { background:var(--green-deep); border-color:var(--green-deep); }
+  button:disabled { opacity:.55; cursor:not-allowed; }
+  .lbl { font-size:13px; color:var(--muted); font-weight:500; }
+  .note { font-size:12.5px; color:var(--faint); padding:9px 2px 0; max-width:64ch; }
   .alert {
-    background:#FBF0EF; border:1px solid #EBCFCC; color:var(--attention);
-    border-radius:6px; padding:11px 13px; margin-bottom:16px; font-size:14px;
+    background:var(--red-wash); border:1px solid #F5C9C9; color:#B32B2B;
+    border-radius:10px; padding:12px 14px; margin-bottom:14px; font-size:14px;
   }
 
-  /* ---- tier groups: a rule and a quiet label, not an all-caps eyebrow ---- */
-  .group { margin-top:30px; }
-  .group-head {
-    display:flex; align-items:center; gap:9px; padding-bottom:8px;
-    border-bottom:1px solid var(--rule); margin-bottom:2px;
+  /* ---- tier groups ---- */
+  .group { margin-top:26px; }
+  .group-head { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+  .group-head h2 { font-size:13.5px; font-weight:700; margin:0; letter-spacing:-.2px; }
+  .group-head .count {
+    font-size:12px; font-weight:600; color:var(--faint);
+    background:var(--sub); border-radius:100px; padding:1px 8px;
   }
-  .group-head h2 { font-size:14px; font-weight:600; margin:0; letter-spacing:-.1px; }
-  .group-head .count { font-size:13px; color:var(--faint); margin-left:auto; }
-  .g-NEEDS_ATTENTION h2 { color:var(--attention); }
-  .g-CHANGED h2 { color:var(--changed); }
-  .g-QUIET h2 { color:var(--quiet); }
-  .pip { width:7px; height:7px; border-radius:50%; flex:none; }
-  .g-NEEDS_ATTENTION .pip { background:var(--attention); }
-  .g-CHANGED .pip { background:var(--changed); }
-  .g-QUIET .pip { background:var(--quiet); }
+  .g-NEEDS_ATTENTION h2 { color:var(--red); }
+  .g-CHANGED h2 { color:var(--amber); }
+  .g-QUIET h2 { color:var(--green-deep); }
 
   /* ---- rows ---- */
-  .row { padding:15px 0; border-bottom:1px solid var(--rule); }
-  .row:last-child { border-bottom:none; }
+  .row {
+    display:grid; grid-template-columns:1fr 108px; gap:14px; align-items:center;
+    padding:14px 14px; border-radius:12px; border:1px solid var(--rule);
+    margin-top:8px; background:var(--bg);
+    animation:settle .34s cubic-bezier(.22,.8,.3,1) both;
+  }
+  /* Motion answers an action: when the clock moves, rows settle into their new
+     rank so you can see what changed position. Nothing animates on idle. */
+  @keyframes settle {
+    from { opacity:0; transform:translateY(5px); }
+    to   { opacity:1; transform:none; }
+  }
+  .row.NEEDS_ATTENTION { border-color:#F3CFCF; background:linear-gradient(90deg,var(--red-wash),var(--bg) 62%); }
+  .row.CHANGED { border-color:#F0DCB8; background:linear-gradient(90deg,var(--amber-wash),var(--bg) 62%); }
+
   .head { display:flex; align-items:baseline; gap:9px; }
-  .tick { font-weight:600; letter-spacing:-.15px; }
-  .co {
-    color:var(--faint); font-size:12.5px; flex:1; min-width:0;
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-  }
-  .px { font-size:14px; color:var(--muted); }
-  .delta { font-weight:600; min-width:66px; text-align:right; }
-  .delta.up { color:var(--up); } .delta.down { color:var(--down); }
+  .tick { font-weight:700; letter-spacing:-.3px; }
+  .co { color:var(--faint); font-size:12px; flex:1; min-width:0;
+        overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-  /* The gauge: |z| against ticks at 1x and 2x normal daily range. This is the
-     product's thesis rendered as a picture. */
-  .gauge { display:flex; align-items:center; gap:9px; margin:9px 0 0; }
-  .track {
-    position:relative; height:5px; flex:1; max-width:190px;
-    background:#EAEEEA; border-radius:100px; overflow:hidden;
-  }
-  .fill { position:absolute; top:0; bottom:0; left:0; border-radius:100px; }
-  .fill.NEEDS_ATTENTION { background:var(--attention); }
-  .fill.CHANGED { background:var(--changed); }
-  .fill.QUIET { background:#B9C4BD; }
-  .tickmark { position:absolute; top:0; bottom:0; width:1px; background:var(--card); }
-  .scale { font-size:11.5px; color:var(--faint); white-space:nowrap; }
+  .why { margin:7px 0 0; padding:0; list-style:none; }
+  .why li { color:var(--muted); font-size:13.5px; padding:.5px 0; max-width:62ch; }
+  .why li.flag { color:var(--amber); font-weight:500; }
 
-  .why { margin:8px 0 0; padding:0; list-style:none; }
-  .why li { color:var(--muted); font-size:13.5px; padding:1px 0; max-width:66ch; }
-  .why li.flag { color:var(--changed); }
+  /* range bar: |z| against the real tier thresholds */
+  .range { display:flex; align-items:center; gap:8px; margin-top:8px; }
+  .track { position:relative; height:6px; width:140px; flex:none;
+           background:var(--sub); border-radius:100px; overflow:hidden; }
+  .fill { position:absolute; top:0; bottom:0; left:0; border-radius:100px;
+          animation:grow .5s cubic-bezier(.22,.8,.3,1) both; }
+  @keyframes grow { from { width:0 !important; } }
+  .fill.NEEDS_ATTENTION { background:var(--red); }
+  .fill.CHANGED { background:var(--amber); }
+  .fill.QUIET { background:#BCCCC5; }
+  .notch { position:absolute; top:-1px; bottom:-1px; width:1.5px; background:var(--bg); }
+  .scale { font-size:11.5px; color:var(--faint); font-weight:500; }
 
-  .foot { display:flex; align-items:center; gap:12px; margin-top:9px; font-size:12px;
-          flex-wrap:wrap; }
+  .foot { display:flex; align-items:center; gap:11px; margin-top:8px;
+          font-size:11.5px; flex-wrap:wrap; }
   .fresh { display:inline-flex; align-items:center; gap:5px; color:var(--faint); }
-  .fresh .pip { width:6px; height:6px; }
-  .fresh.LIVE .pip { background:var(--up); }
-  .fresh.DELAYED .pip { background:var(--changed); }
-  .fresh.CLOSED .pip { background:var(--faint); }
-  .fresh.STALE .pip, .fresh.UNAVAILABLE .pip { background:var(--attention); }
-  .fresh.STALE, .fresh.UNAVAILABLE { color:var(--attention); }
+  .dot { width:6px; height:6px; border-radius:50%; flex:none; }
+  .fresh.LIVE .dot { background:var(--green); }
+  .fresh.DELAYED .dot { background:var(--amber); }
+  .fresh.CLOSED .dot { background:var(--faint); }
+  .fresh.STALE .dot, .fresh.UNAVAILABLE .dot { background:var(--red); }
+  .fresh.STALE, .fresh.UNAVAILABLE { color:var(--red); }
   .basis { color:var(--faint); }
-  .drop {
-    margin-left:auto; background:none; border:none; color:var(--faint);
-    font-size:12px; padding:2px 4px; cursor:pointer;
-  }
-  .drop:hover { color:var(--down); background:none; }
+  .drop { margin-left:auto; background:none; border:none; color:var(--faint);
+          font-size:11.5px; padding:2px 5px; cursor:pointer; }
+  .drop:hover { color:var(--red); background:none; }
 
-  .blank {
-    padding:44px 4px; color:var(--muted); border-top:1px solid var(--rule);
-    max-width:46ch;
-  }
-  .blank strong { font-family:var(--serif); font-size:22px; font-weight:400;
-                  display:block; margin-bottom:7px; color:var(--ink); }
+  /* ---- right rail: price, change, and the path you missed ---- */
+  .rail { text-align:right; }
+  .px { font-size:14.5px; font-weight:600; }
+  .delta { font-size:13px; font-weight:700; margin-top:1px; }
+  .delta.up { color:var(--green-deep); } .delta.down { color:var(--red); }
+  .spark { display:block; margin:5px 0 0 auto; }
+  .spark path { fill:none; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round;
+                stroke-dasharray:1000; animation:draw 1s ease-out both; }
+  @keyframes draw { from { stroke-dashoffset:1000; } to { stroke-dashoffset:0; } }
+  .spark .area { stroke:none; opacity:.13; animation:none; }
 
-  @media (max-width:560px) {
-    .verdict { font-size:29px; }
+  .blank { padding:40px 4px; color:var(--muted); max-width:44ch; }
+  .blank strong { font-size:20px; font-weight:700; display:block; margin-bottom:6px;
+                  color:var(--ink); letter-spacing:-.4px; }
+
+  @media (max-width:600px) {
+    .verdict { font-size:27px; }
+    .row { grid-template-columns:1fr 92px; gap:10px; }
     .co { display:none; }
-    .track { max-width:120px; }
+    .track { width:104px; }
   }
 </style>
 </head>
@@ -170,7 +191,13 @@
 <div class="wrap">
 
   <div class="mast">
-    <span class="mark">Since<em>.</em></span>
+    <span class="logo" aria-hidden="true">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M1 10.5L4.6 6.2L7.6 8.4L13 2" stroke="#fff" stroke-width="1.9"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </span>
+    <span class="mark">Since</span>
     <span class="mode" id="mode">loading</span>
   </div>
 
@@ -180,19 +207,21 @@
 
   <div id="alert"></div>
 
-  <div class="bar">
-    <input type="text" id="sym" list="syms" autocomplete="off"
-           placeholder="Add a stock, e.g. RELIANCE.NS" aria-label="Symbol">
-    <datalist id="syms"></datalist>
-    <input type="number" id="thr" placeholder="Tell me at ₹" step="0.01" min="0"
-           aria-label="Price level">
-    <button id="add">Add</button>
-  </div>
-  <div class="bar last">
-    <span class="lbl">Looking at</span>
-    <input type="datetime-local" id="clock" step="60" aria-label="Viewing time">
-    <button id="latest">Latest</button>
-    <button class="go" id="ack">Mark all as seen</button>
+  <div class="panel">
+    <div class="bar">
+      <input type="text" id="sym" list="syms" autocomplete="off"
+             placeholder="Add a stock, e.g. RELIANCE.NS" aria-label="Symbol">
+      <datalist id="syms"></datalist>
+      <input type="number" id="thr" placeholder="Tell me at ₹" step="0.01" min="0"
+             aria-label="Price level">
+      <button id="add">Add</button>
+    </div>
+    <div class="bar">
+      <span class="lbl">Looking at</span>
+      <input type="datetime-local" id="clock" step="60" aria-label="Viewing time">
+      <button id="latest">Latest</button>
+      <button class="go" id="ack">Mark all as seen</button>
+    </div>
   </div>
   <p class="note" id="note"></p>
 
@@ -209,9 +238,7 @@ const money = n => n == null ? "—"
 const when = iso => new Date(iso).toLocaleString("en-IN",
   { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit", hour12:true });
 
-function alertUser(msg) {
-  $("alert").innerHTML = msg ? `<div class="alert">${msg}</div>` : "";
-}
+const alertUser = m => $("alert").innerHTML = m ? `<div class="alert">${m}</div>` : "";
 
 async function api(path, opts = {}) {
   const res = await fetch(path, { headers:HDRS, ...opts });
@@ -224,7 +251,7 @@ async function api(path, opts = {}) {
 }
 
 // The '+' in a +05:30 offset decodes server-side as a space, so the clock
-// parameter must be encoded.
+// parameter has to be encoded.
 const at = () => clockValue ? "?at=" + encodeURIComponent(clockValue) : "";
 
 async function boot() {
@@ -235,16 +262,15 @@ async function boot() {
     $("mode").textContent = demo.span ? "replaying recorded NSE data" : "live market";
     $("syms").innerHTML = list.results
       .map(i => `<option value="${i.symbol}">${i.display_name}</option>`).join("");
-
     if (demo.span) {
       span = demo.span;
       $("clock").min = span[0].slice(0,16);
       $("clock").max = span[1].slice(0,16);
       $("clock").value = span[1].slice(0,16);
       clockValue = span[1];
-      $("note").textContent =
-        `Every price here was recorded from the NSE between ${when(span[0])} and `
-        + `${when(span[1])}. Nothing is simulated — move the clock to replay it.`;
+      $("note").textContent = `Every price here was recorded from the NSE between `
+        + `${when(span[0])} and ${when(span[1])}. Nothing is simulated — move the `
+        + `clock to replay it.`;
     } else {
       $("clock").style.display = "none";
       $("latest").style.display = "none";
@@ -257,18 +283,14 @@ async function boot() {
 }
 
 async function load() {
-  try {
-    alertUser("");
-    render(await api("/api/digest" + at()));
-  } catch (e) {
-    alertUser("Couldn't load your watchlist. " + e.message);
-  }
+  try { alertUser(""); render(await api("/api/digest" + at())); }
+  catch (e) { alertUser("Couldn't load your watchlist. " + e.message); }
 }
 
 function render(d) {
+  const v = $("verdict");
   if (!d.total) {
-    $("verdict").textContent = "Nothing to watch yet.";
-    $("verdict").className = "verdict";
+    v.textContent = "Nothing to watch yet."; v.className = "verdict";
     $("since").textContent = ""; $("stamp").textContent = "";
     $("list").innerHTML = `<div class="blank"><strong>Add a stock above.</strong>
       From then on, Since remembers where you left off and tells you only what
@@ -278,25 +300,21 @@ function render(d) {
 
   const c = d.counts || {};
   const attn = c.NEEDS_ATTENTION || 0, chg = c.CHANGED || 0;
-  const v = $("verdict");
 
   // An honest quiet day is a real answer, not an empty state. A watchlist that
   // can say "nothing needs you" is more trustworthy than one that always
   // manufactures something.
   if (!attn && !chg) {
-    v.textContent = "Nothing needs you.";
-    v.className = "verdict calm";
+    v.textContent = "Nothing needs you."; v.className = "verdict calm";
   } else if (attn) {
-    v.innerHTML = `<span class="n">${attn}</span> of ${d.total} `
+    v.innerHTML = `<span class="hit">${attn}</span> of ${d.total} `
       + `${attn === 1 ? "needs" : "need"} a look.`;
     v.className = "verdict";
   } else {
-    v.innerHTML = `<span class="n">${chg}</span> moved, none urgently.`;
-    v.className = "verdict";
+    v.innerHTML = `${chg} moved, none urgently.`; v.className = "verdict";
   }
 
-  const basis = new Set(
-    Object.values(d.tiers || {}).flat().map(i => i.comparison));
+  const basis = new Set(Object.values(d.tiers || {}).flat().map(i => i.comparison));
   $("since").textContent = basis.has("since you last checked")
     ? "Measured from the moment you last marked these as seen."
     : "Measured from the previous close — mark them as seen to start tracking.";
@@ -308,7 +326,7 @@ function render(d) {
     const items = (d.tiers || {})[tier] || [];
     if (!items.length) continue;
     html += `<section class="group g-${tier}">
-      <div class="group-head"><span class="pip"></span><h2>${title[tier]}</h2>
+      <div class="group-head"><h2>${title[tier]}</h2>
       <span class="count">${items.length}</span></div>
       ${items.map(row).join("")}</section>`;
   }
@@ -320,53 +338,74 @@ function render(d) {
   });
 }
 
+// The exact window the user was away for, drawn from real recorded prices.
+function sparkline(points, rising) {
+  if (!points || points.length < 2) return "";
+  const W = 104, H = 30, P = 2;
+  const lo = Math.min(...points), hi = Math.max(...points);
+  const range = hi - lo || 1;
+  const x = i => P + (i / (points.length - 1)) * (W - P * 2);
+  const y = p => H - P - ((p - lo) / range) * (H - P * 2);
+  const line = points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p).toFixed(1)}`).join("");
+  const stroke = rising ? "var(--green)" : "var(--red)";
+  return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"
+            aria-hidden="true">
+    <path class="area" d="${line}L${x(points.length-1).toFixed(1)},${H}L${x(0).toFixed(1)},${H}Z"
+          fill="${stroke}"/>
+    <path d="${line}" stroke="${stroke}"/>
+  </svg>`;
+}
+
 function row(i) {
   const dir = i.pct_change > 0 ? "up" : i.pct_change < 0 ? "down" : "";
   const sign = i.pct_change > 0 ? "+" : "";
   const z = i.z == null ? null : Math.abs(i.z);
 
-  // The gauge tops out at 3x normal. The two ticks are the ACTUAL tier
-  // thresholds (1.5x -> Moved, 2.0x -> Needs a look), so the picture and the
-  // rule cannot disagree. Drawing them at a tidy 1x and 2x would have looked
-  // neater and quietly lied about where the cutoffs are.
+  // Notches sit at the ACTUAL tier thresholds, so the picture and the rule
+  // cannot disagree. Drawing them at a tidy 1x and 2x would have looked neater
+  // and quietly misstated where the cutoffs are.
   const T_CHANGED = 1.5, T_ATTENTION = 2.0, T_MAX = 3.0;
-  let gauge = "";
+  let range = "";
   if (z != null) {
-    const pct = Math.min(z / T_MAX, 1) * 100;
-    gauge = `<div class="gauge">
+    range = `<div class="range">
       <div class="track">
-        <div class="fill ${i.tier}" style="width:${pct.toFixed(1)}%"></div>
-        <div class="tickmark" style="left:${(T_CHANGED / T_MAX * 100).toFixed(1)}%"></div>
-        <div class="tickmark" style="left:${(T_ATTENTION / T_MAX * 100).toFixed(1)}%"></div>
+        <div class="fill ${i.tier}" style="width:${(Math.min(z/T_MAX,1)*100).toFixed(1)}%"></div>
+        <div class="notch" style="left:${(T_CHANGED/T_MAX*100).toFixed(1)}%"></div>
+        <div class="notch" style="left:${(T_ATTENTION/T_MAX*100).toFixed(1)}%"></div>
       </div>
-      <span class="scale">${z.toFixed(1)}× its normal range</span>
+      <span class="scale">${z.toFixed(1)}× normal</span>
     </div>`;
   }
 
-  return `<article class="row">
-    <div class="head">
-      <span class="tick">${i.symbol.replace(".NS","")}</span>
-      <span class="co">${i.name}</span>
-      <span class="px">₹${money(i.price)}</span>
-      <span class="delta ${dir}">${i.pct_change == null ? "—"
-        : sign + i.pct_change.toFixed(2) + "%"}</span>
+  return `<article class="row ${i.tier}">
+    <div>
+      <div class="head">
+        <span class="tick">${i.symbol.replace(".NS","")}</span>
+        <span class="co">${i.name}</span>
+      </div>
+      ${range}
+      <ul class="why">${i.reasons.map(r =>
+        `<li class="${r.type === "SUSPECTED_CORPORATE_ACTION" ? "flag" : ""}">${r.message}</li>`
+      ).join("")}</ul>
+      <div class="foot">
+        <span class="fresh ${i.freshness}"><span class="dot"></span>${freshText(i.freshness)}</span>
+        <span class="basis">${i.comparison}</span>
+        ${i.threshold_price ? `<span class="basis">your level ₹${money(i.threshold_price)}</span>` : ""}
+        <button class="drop" data-id="${i.instrument_id}">remove</button>
+      </div>
     </div>
-    ${gauge}
-    <ul class="why">${i.reasons.map(r =>
-      `<li class="${r.type === "SUSPECTED_CORPORATE_ACTION" ? "flag" : ""}">${r.message}</li>`
-    ).join("")}</ul>
-    <div class="foot">
-      <span class="fresh ${i.freshness}"><span class="pip"></span>${freshText(i.freshness)}</span>
-      <span class="basis">${i.comparison}</span>
-      ${i.threshold_price ? `<span class="basis">your level ₹${money(i.threshold_price)}</span>` : ""}
-      <button class="drop" data-id="${i.instrument_id}">remove</button>
+    <div class="rail">
+      <div class="px">₹${money(i.price)}</div>
+      <div class="delta ${dir}">${i.pct_change == null ? "—"
+        : sign + i.pct_change.toFixed(2) + "%"}</div>
+      ${sparkline(i.spark, i.pct_change >= 0)}
     </div>
   </article>`;
 }
 
-// Market-closed is not staleness: the last price of a finished session is the
-// correct answer until the next open, and saying otherwise teaches people to
-// distrust a good number.
+// Market-closed is not staleness: the last price of a finished session stays
+// the correct answer until the next open, and calling it stale teaches people
+// to distrust a good number.
 function freshText(f) {
   return { LIVE:"live", DELAYED:"a few minutes old", CLOSED:"market closed",
            STALE:"not current — shown but not scored",
@@ -378,10 +417,9 @@ $("add").onclick = async () => {
   if (!symbol) return;
   const t = parseFloat($("thr").value);
   try {
-    await api("/api/watchlist" + at(), { method:"POST", body:JSON.stringify({
-      symbol, threshold_price: isNaN(t) ? null : t }) });
-    $("sym").value = ""; $("thr").value = "";
-    load();
+    await api("/api/watchlist" + at(), { method:"POST",
+      body:JSON.stringify({ symbol, threshold_price: isNaN(t) ? null : t }) });
+    $("sym").value = ""; $("thr").value = ""; load();
   } catch (e) { alertUser(e.message); }
 };
 $("sym").addEventListener("keydown", e => { if (e.key === "Enter") $("add").click(); });

@@ -1,0 +1,15 @@
+# Pinned to minor versions: a reviewer cloning this in three months should get
+# the same behaviour, not whatever resolved that morning.
+fastapi>=0.115,<0.117
+uvicorn[standard]>=0.32,<0.36
+psycopg2-binary>=2.9,<3.0
+pydantic>=2.9,<3.0
+pydantic-settings>=2.6,<3.0
+python-dotenv>=1.0,<2.0
+
+# Recording and baselines only. The API does not import these at runtime.
+yfinance>=0.2.50
+pandas>=2.2
+
+# Tests
+pytest>=8.0
