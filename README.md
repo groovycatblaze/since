@@ -176,10 +176,9 @@ calendar days and roughly zero trading days — scaling volatility by √3 inste
                        │         └── LiveProvider    (yfinance, batched)
                        └──────────────┬────────────────┘
                                       ▼
-                          PostgreSQL          Redis
-                          shared market       latest quote
-                          state + personal    per instrument
-                          watermarks          (cache only)
+                          PostgreSQL
+                          shared market state
+                          + personal watermarks
 ```
 
 **Market state is shared; memory is personal.** This one sentence is the scaling
@@ -192,10 +191,14 @@ gets more expensive as *instruments* are added, not as users are.
 
 - **PostgreSQL** — every query here is relational (watchlist → watermark → latest
   observation → baseline). NoSQL would buy nothing.
-- **Redis** — deduplicates quote fetches across users and holds the single-flight
-  lock. Persistence is explicitly disabled (`--save "" --appendonly no`): nothing
-  in it is un-reconstructible from Postgres, so losing it costs one refresh cycle
-  and zero user data.
+- **Redis is provisioned but not yet used.** Quote deduplication and the
+  single-flight lock currently run in-process (a TTL dict plus a
+  `threading.Lock` in `service.py`), which is correct for a single instance and
+  wrong for several. Redis is in `docker-compose.yml` with persistence disabled
+  because that is the one thing it would hold, and nothing in it would be
+  un-reconstructible from Postgres. Moving the lock and the TTL cache behind it
+  is what makes the API horizontally scalable, and it is the next change I would
+  make. Claiming it already does that job would be easier and untrue.
 - **No Celery, no Kafka, no microservices.** There is one periodic refresh and no
   fan-out. A lock plus a TTL is 40 lines and correct. Adding a broker and a worker
   fleet for one job would be complexity I could not justify.

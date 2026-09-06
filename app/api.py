@@ -76,9 +76,11 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(title="Since", version="1.0", lifespan=lifespan)
 
-# The frontend runs on a different port in development. Locked to localhost
-# rather than "*", because a wildcard on a financial API is a habit worth not
-# forming even in a demo.
+# The frontend is served by this same app, so every call is same-origin and
+# CORS is not needed at all. Kept narrow rather than removed because a
+# deployment that later splits the frontend onto its own host will want exactly
+# this list -- and a wildcard on a financial API is a habit worth not forming
+# even in a demo.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
