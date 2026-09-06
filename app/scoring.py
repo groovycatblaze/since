@@ -110,6 +110,11 @@ class Observation:
     price: float
     cumulative_volume: float | None = None
     freshness: Freshness = Freshness.LIVE
+    # Fraction of the trading session elapsed at this observation (0-1).
+    # Needed because cumulative_volume is volume SO FAR TODAY and the baseline
+    # is a FULL-day median: comparing them directly makes the volume signal
+    # impossible to trigger in the morning and understated all day.
+    session_fraction: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -128,6 +133,8 @@ class UserContext:
 @dataclass(frozen=True)
 class Thresholds:
     sigma_needs_attention: float = 2.0
+    # Above this, no volume confirmation is required.
+    sigma_alone: float = 2.5
     sigma_changed: float = 1.5
     volume_confirm_ratio: float = 1.5
     volume_alone_ratio: float = 3.0
@@ -194,17 +201,30 @@ def _looks_like_corporate_action(
 
 
 def _volume_ratio(obs: Observation, baseline: Baseline) -> float | None:
-    """None, not 1.0, when volume is unknown.
+    """Volume so far today, against volume normally expected BY THIS HOUR.
 
-    The distinction matters: 1.0 would assert "volume was normal", which we do
-    not know. None lets every downstream rule skip the volume signal instead of
-    acting on a fabricated value.
+    Prorating matters: at 10:15 an hour of trading against a full-day median
+    reads as 0.15x no matter how frenzied it is, so the signal could never fire
+    in the morning. Scaling the expectation by session progress makes the ratio
+    mean the same thing at any time of day.
+
+    This assumes volume accrues evenly through the session, which it does not
+    -- real intraday volume is U-shaped, heavy at the open and close. A volume
+    curve would be the correct refinement; it is documented as a limitation
+    rather than pretended away.
+
+    None, not 1.0, when volume is unknown. 1.0 would assert "volume was
+    normal", which we do not know. None lets downstream rules skip the signal
+    instead of acting on a fabricated value.
     """
     if obs.cumulative_volume is None or not baseline.median_volume:
         return None
     if baseline.median_volume <= 0:
         return None
-    return obs.cumulative_volume / baseline.median_volume
+    # Floor the fraction: in the first minutes of trading the denominator
+    # approaches zero and the ratio would explode on ordinary opening prints.
+    fraction = max(obs.session_fraction, 0.1)
+    return obs.cumulative_volume / (baseline.median_volume * fraction)
 
 
 def score(
@@ -325,10 +345,20 @@ def score(
     # Scale both drift and volatility to the elapsed window: mean grows with t,
     # standard deviation with sqrt(t).
     sigma = max(baseline.sigma_log_return, 1e-6)
-    expected = baseline.mean_log_return * elapsed
-    z = (log_return - expected) / (sigma * math.sqrt(elapsed))
 
-    multiple = abs(log_return) / (sigma * math.sqrt(elapsed))
+    # NO DRIFT TERM. The obvious formulation subtracts an expected return
+    # (mu * t) before dividing, and that is wrong at this sample size: 30 days
+    # is ample to estimate volatility and nowhere near enough to estimate a
+    # mean return -- the standard error on mu swamps mu itself. Including it
+    # put pure noise in the numerator, and the visible symptom was z
+    # disagreeing in SIGN with the price move on screen (+1.1% reading as
+    # z = -0.72), which is indefensible to a user.
+    #
+    # Volatility is estimable at short horizons. Drift is not. So we normalise
+    # by sigma and not by mu, and z now always shares the sign of the move.
+    z = log_return / (sigma * math.sqrt(elapsed))
+
+    multiple = abs(z)
     if abs(z) >= t.sigma_changed:
         reasons.append(Reason(
             ReasonType.SIGMA_MOVE,
@@ -422,6 +452,13 @@ def _tier_for(
     # A large move confirmed by volume. The volume requirement is what filters
     # out thin-book artefacts in illiquid names -- a big print on almost no
     # volume is a microstructure event, not news.
+    # A very large move needs no confirmation. The volume gate exists to filter
+    # thin-book artefacts in illiquid names, and a move of this size is not
+    # that. Requiring volume for everything left genuine 2.5-sigma moves in the
+    # lower tier purely because trading happened to be ordinary.
+    if az >= t.sigma_alone:
+        return Tier.NEEDS_ATTENTION
+
     if az >= t.sigma_needs_attention and (vr is None or vr >= t.volume_confirm_ratio):
         return Tier.NEEDS_ATTENTION
 

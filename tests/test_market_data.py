@@ -211,3 +211,21 @@ def test_missing_fixtures_fail_loudly(tmp_path):
     blank. Fail at startup with an actionable message instead."""
     with pytest.raises(FileNotFoundError, match="recorder.py session"):
         ReplayProvider(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Timestamp parsing at the API edge
+# ---------------------------------------------------------------------------
+
+def test_mangled_timezone_offset_is_repaired():
+    """A "+05:30" offset arrives as " 05:30" whenever the query string is not
+    URL-encoded, because '+' is the encoding for a space. Rejecting it would
+    surface as a broken clock rather than a quoting mistake, so we repair."""
+    import re
+    from datetime import datetime as dt
+
+    def repair(raw: str) -> dt:
+        return dt.fromisoformat(re.sub(r"\s(\d{2}:\d{2})$", r"+\1", raw.strip()))
+
+    assert repair("2026-09-04T15:24:00 05:30") == repair("2026-09-04T15:24:00+05:30")
+    assert repair("2026-09-04T15:24:00").tzinfo is None

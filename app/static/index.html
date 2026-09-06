@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Since — what changed while you were away</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Since — design notes
+     ---------------------
+     Every watchlist opens with a grid of tickers and red/green numbers. This
+     product is not a dashboard; it is a report from an absence. So the hero is
+     a SENTENCE, set large in a serif, stating the verdict. The list beneath it
+     stays quiet.
+
+     The one bold element is the range gauge on each row: a track with ticks at
+     1x and 2x a stock's normal daily movement, and a bar showing where this
+     move actually falls. It makes volatility normalisation legible at a glance
+     without a word of explanation.
+
+     Palette is market red and green, desaturated. The job of this product is
+     to REDUCE urgency, so it should not look like a trading terminal. */
+  :root {
+    --paper:#F6F7F5; --card:#FFFFFF; --rule:#E3E7E3;
+    --ink:#16201C; --muted:#5C6B64; --faint:#8E9A94;
+    --attention:#B4342A; --changed:#A66A16; --quiet:#3F7D5E;
+    --up:#2A7D4F; --down:#B4342A; --accent:#1F4B3F;
+    --serif:"Instrument Serif", Georgia, serif;
+    --sans:"Archivo", -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink); font-family:var(--sans);
+    font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+    font-variant-numeric:tabular-nums;
+  }
+  .wrap { max-width:720px; margin:0 auto; padding:38px 22px 90px; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:3px; }
+  @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
+
+  /* ---- masthead ---- */
+  .mast { display:flex; align-items:baseline; gap:10px; margin-bottom:34px; }
+  .mark { font-family:var(--serif); font-size:25px; line-height:1; letter-spacing:-.2px; }
+  .mark em { font-style:italic; }
+  .mode {
+    font-size:11px; color:var(--faint); border:1px solid var(--rule);
+    border-radius:100px; padding:2px 9px; margin-left:auto; white-space:nowrap;
+  }
+
+  /* ---- the verdict: the one loud thing on the page ---- */
+  .verdict {
+    font-family:var(--serif); font-size:36px; line-height:1.22; letter-spacing:-.4px;
+    margin:0 0 10px; max-width:19ch; font-weight:400;
+  }
+  .verdict .n { font-style:italic; }
+  .verdict.calm { color:var(--quiet); }
+  .since { color:var(--muted); font-size:14px; margin:0 0 4px; max-width:60ch; }
+  .stamp { color:var(--faint); font-size:12.5px; margin:0 0 30px; }
+
+  /* ---- controls ---- */
+  .bar {
+    display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+    padding:13px 0; border-top:1px solid var(--rule);
+  }
+  .bar.last { border-bottom:1px solid var(--rule); }
+  input, button {
+    font-family:var(--sans); font-size:14px; color:var(--ink);
+  }
+  input[type=text], input[type=number], input[type=datetime-local] {
+    padding:7px 10px; border:1px solid var(--rule); border-radius:5px; background:var(--card);
+  }
+  input[type=text] { flex:1; min-width:150px; }
+  input[type=number] { width:132px; }
+  button {
+    padding:7px 13px; border-radius:5px; border:1px solid var(--rule);
+    background:var(--card); cursor:pointer; transition:background .12s ease;
+  }
+  button:hover { background:#EFF2EF; }
+  button.go { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.go:hover { background:#17392F; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .lbl { font-size:13px; color:var(--muted); }
+  .note { font-size:12.5px; color:var(--faint); padding:10px 0 0; max-width:62ch; }
+  .alert {
+    background:#FBF0EF; border:1px solid #EBCFCC; color:var(--attention);
+    border-radius:6px; padding:11px 13px; margin-bottom:16px; font-size:14px;
+  }
+
+  /* ---- tier groups: a rule and a quiet label, not an all-caps eyebrow ---- */
+  .group { margin-top:30px; }
+  .group-head {
+    display:flex; align-items:center; gap:9px; padding-bottom:8px;
+    border-bottom:1px solid var(--rule); margin-bottom:2px;
+  }
+  .group-head h2 { font-size:14px; font-weight:600; margin:0; letter-spacing:-.1px; }
+  .group-head .count { font-size:13px; color:var(--faint); margin-left:auto; }
+  .g-NEEDS_ATTENTION h2 { color:var(--attention); }
+  .g-CHANGED h2 { color:var(--changed); }
+  .g-QUIET h2 { color:var(--quiet); }
+  .pip { width:7px; height:7px; border-radius:50%; flex:none; }
+  .g-NEEDS_ATTENTION .pip { background:var(--attention); }
+  .g-CHANGED .pip { background:var(--changed); }
+  .g-QUIET .pip { background:var(--quiet); }
+
+  /* ---- rows ---- */
+  .row { padding:15px 0; border-bottom:1px solid var(--rule); }
+  .row:last-child { border-bottom:none; }
+  .head { display:flex; align-items:baseline; gap:9px; }
+  .tick { font-weight:600; letter-spacing:-.15px; }
+  .co {
+    color:var(--faint); font-size:12.5px; flex:1; min-width:0;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .px { font-size:14px; color:var(--muted); }
+  .delta { font-weight:600; min-width:66px; text-align:right; }
+  .delta.up { color:var(--up); } .delta.down { color:var(--down); }
+
+  /* The gauge: |z| against ticks at 1x and 2x normal daily range. This is the
+     product's thesis rendered as a picture. */
+  .gauge { display:flex; align-items:center; gap:9px; margin:9px 0 0; }
+  .track {
+    position:relative; height:5px; flex:1; max-width:190px;
+    background:#EAEEEA; border-radius:100px; overflow:hidden;
+  }
+  .fill { position:absolute; top:0; bottom:0; left:0; border-radius:100px; }
+  .fill.NEEDS_ATTENTION { background:var(--attention); }
+  .fill.CHANGED { background:var(--changed); }
+  .fill.QUIET { background:#B9C4BD; }
+  .tickmark { position:absolute; top:0; bottom:0; width:1px; background:var(--card); }
+  .scale { font-size:11.5px; color:var(--faint); white-space:nowrap; }
+
+  .why { margin:8px 0 0; padding:0; list-style:none; }
+  .why li { color:var(--muted); font-size:13.5px; padding:1px 0; max-width:66ch; }
+  .why li.flag { color:var(--changed); }
+
+  .foot { display:flex; align-items:center; gap:12px; margin-top:9px; font-size:12px;
+          flex-wrap:wrap; }
+  .fresh { display:inline-flex; align-items:center; gap:5px; color:var(--faint); }
+  .fresh .pip { width:6px; height:6px; }
+  .fresh.LIVE .pip { background:var(--up); }
+  .fresh.DELAYED .pip { background:var(--changed); }
+  .fresh.CLOSED .pip { background:var(--faint); }
+  .fresh.STALE .pip, .fresh.UNAVAILABLE .pip { background:var(--attention); }
+  .fresh.STALE, .fresh.UNAVAILABLE { color:var(--attention); }
+  .basis { color:var(--faint); }
+  .drop {
+    margin-left:auto; background:none; border:none; color:var(--faint);
+    font-size:12px; padding:2px 4px; cursor:pointer;
+  }
+  .drop:hover { color:var(--down); background:none; }
+
+  .blank {
+    padding:44px 4px; color:var(--muted); border-top:1px solid var(--rule);
+    max-width:46ch;
+  }
+  .blank strong { font-family:var(--serif); font-size:22px; font-weight:400;
+                  display:block; margin-bottom:7px; color:var(--ink); }
+
+  @media (max-width:560px) {
+    .verdict { font-size:29px; }
+    .co { display:none; }
+    .track { max-width:120px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="mast">
+    <span class="mark">Since<em>.</em></span>
+    <span class="mode" id="mode">loading</span>
+  </div>
+
+  <h1 class="verdict" id="verdict">Reading the market…</h1>
+  <p class="since" id="since"></p>
+  <p class="stamp" id="stamp"></p>
+
+  <div id="alert"></div>
+
+  <div class="bar">
+    <input type="text" id="sym" list="syms" autocomplete="off"
+           placeholder="Add a stock, e.g. RELIANCE.NS" aria-label="Symbol">
+    <datalist id="syms"></datalist>
+    <input type="number" id="thr" placeholder="Tell me at ₹" step="0.01" min="0"
+           aria-label="Price level">
+    <button id="add">Add</button>
+  </div>
+  <div class="bar last">
+    <span class="lbl">Looking at</span>
+    <input type="datetime-local" id="clock" step="60" aria-label="Viewing time">
+    <button id="latest">Latest</button>
+    <button class="go" id="ack">Mark all as seen</button>
+  </div>
+  <p class="note" id="note"></p>
+
+  <div id="list"></div>
+</div>
+
+<script>
+const HDRS = { "Content-Type":"application/json", "X-User":"demo@since.app" };
+let span = null, clockValue = null;
+
+const $ = id => document.getElementById(id);
+const money = n => n == null ? "—"
+  : n.toLocaleString("en-IN", { minimumFractionDigits:2, maximumFractionDigits:2 });
+const when = iso => new Date(iso).toLocaleString("en-IN",
+  { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit", hour12:true });
+
+function alertUser(msg) {
+  $("alert").innerHTML = msg ? `<div class="alert">${msg}</div>` : "";
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { headers:HDRS, ...opts });
+  if (!res.ok) {
+    let d = res.statusText;
+    try { d = (await res.json()).detail || d; } catch {}
+    throw new Error(d);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+// The '+' in a +05:30 offset decodes server-side as a space, so the clock
+// parameter must be encoded.
+const at = () => clockValue ? "?at=" + encodeURIComponent(clockValue) : "";
+
+async function boot() {
+  try {
+    const [health, demo, list] = await Promise.all([
+      api("/api/health"), api("/api/demo/span"), api("/api/instruments")
+    ]);
+    $("mode").textContent = demo.span ? "replaying recorded NSE data" : "live market";
+    $("syms").innerHTML = list.results
+      .map(i => `<option value="${i.symbol}">${i.display_name}</option>`).join("");
+
+    if (demo.span) {
+      span = demo.span;
+      $("clock").min = span[0].slice(0,16);
+      $("clock").max = span[1].slice(0,16);
+      $("clock").value = span[1].slice(0,16);
+      clockValue = span[1];
+      $("note").textContent =
+        `Every price here was recorded from the NSE between ${when(span[0])} and `
+        + `${when(span[1])}. Nothing is simulated — move the clock to replay it.`;
+    } else {
+      $("clock").style.display = "none";
+      $("latest").style.display = "none";
+      $("note").textContent = "Live prices from the NSE.";
+    }
+    await load();
+  } catch (e) {
+    alertUser("The server isn't responding. Start it with: uvicorn app.api:app --reload");
+  }
+}
+
+async function load() {
+  try {
+    alertUser("");
+    render(await api("/api/digest" + at()));
+  } catch (e) {
+    alertUser("Couldn't load your watchlist. " + e.message);
+  }
+}
+
+function render(d) {
+  if (!d.total) {
+    $("verdict").textContent = "Nothing to watch yet.";
+    $("verdict").className = "verdict";
+    $("since").textContent = ""; $("stamp").textContent = "";
+    $("list").innerHTML = `<div class="blank"><strong>Add a stock above.</strong>
+      From then on, Since remembers where you left off and tells you only what
+      actually moved.</div>`;
+    return;
+  }
+
+  const c = d.counts || {};
+  const attn = c.NEEDS_ATTENTION || 0, chg = c.CHANGED || 0;
+  const v = $("verdict");
+
+  // An honest quiet day is a real answer, not an empty state. A watchlist that
+  // can say "nothing needs you" is more trustworthy than one that always
+  // manufactures something.
+  if (!attn && !chg) {
+    v.textContent = "Nothing needs you.";
+    v.className = "verdict calm";
+  } else if (attn) {
+    v.innerHTML = `<span class="n">${attn}</span> of ${d.total} `
+      + `${attn === 1 ? "needs" : "need"} a look.`;
+    v.className = "verdict";
+  } else {
+    v.innerHTML = `<span class="n">${chg}</span> moved, none urgently.`;
+    v.className = "verdict";
+  }
+
+  const basis = new Set(
+    Object.values(d.tiers || {}).flat().map(i => i.comparison));
+  $("since").textContent = basis.has("since you last checked")
+    ? "Measured from the moment you last marked these as seen."
+    : "Measured from the previous close — mark them as seen to start tracking.";
+  $("stamp").textContent = "Prices as of " + when(d.as_of);
+
+  const title = { NEEDS_ATTENTION:"Needs a look", CHANGED:"Moved", QUIET:"Quiet" };
+  let html = "";
+  for (const tier of ["NEEDS_ATTENTION","CHANGED","QUIET"]) {
+    const items = (d.tiers || {})[tier] || [];
+    if (!items.length) continue;
+    html += `<section class="group g-${tier}">
+      <div class="group-head"><span class="pip"></span><h2>${title[tier]}</h2>
+      <span class="count">${items.length}</span></div>
+      ${items.map(row).join("")}</section>`;
+  }
+  $("list").innerHTML = html;
+
+  document.querySelectorAll(".drop").forEach(b => b.onclick = async () => {
+    try { await api("/api/watchlist/" + b.dataset.id, { method:"DELETE" }); load(); }
+    catch (e) { alertUser(e.message); }
+  });
+}
+
+function row(i) {
+  const dir = i.pct_change > 0 ? "up" : i.pct_change < 0 ? "down" : "";
+  const sign = i.pct_change > 0 ? "+" : "";
+  const z = i.z == null ? null : Math.abs(i.z);
+
+  // The gauge tops out at 3x normal. The two ticks are the ACTUAL tier
+  // thresholds (1.5x -> Moved, 2.0x -> Needs a look), so the picture and the
+  // rule cannot disagree. Drawing them at a tidy 1x and 2x would have looked
+  // neater and quietly lied about where the cutoffs are.
+  const T_CHANGED = 1.5, T_ATTENTION = 2.0, T_MAX = 3.0;
+  let gauge = "";
+  if (z != null) {
+    const pct = Math.min(z / T_MAX, 1) * 100;
+    gauge = `<div class="gauge">
+      <div class="track">
+        <div class="fill ${i.tier}" style="width:${pct.toFixed(1)}%"></div>
+        <div class="tickmark" style="left:${(T_CHANGED / T_MAX * 100).toFixed(1)}%"></div>
+        <div class="tickmark" style="left:${(T_ATTENTION / T_MAX * 100).toFixed(1)}%"></div>
+      </div>
+      <span class="scale">${z.toFixed(1)}× its normal range</span>
+    </div>`;
+  }
+
+  return `<article class="row">
+    <div class="head">
+      <span class="tick">${i.symbol.replace(".NS","")}</span>
+      <span class="co">${i.name}</span>
+      <span class="px">₹${money(i.price)}</span>
+      <span class="delta ${dir}">${i.pct_change == null ? "—"
+        : sign + i.pct_change.toFixed(2) + "%"}</span>
+    </div>
+    ${gauge}
+    <ul class="why">${i.reasons.map(r =>
+      `<li class="${r.type === "SUSPECTED_CORPORATE_ACTION" ? "flag" : ""}">${r.message}</li>`
+    ).join("")}</ul>
+    <div class="foot">
+      <span class="fresh ${i.freshness}"><span class="pip"></span>${freshText(i.freshness)}</span>
+      <span class="basis">${i.comparison}</span>
+      ${i.threshold_price ? `<span class="basis">your level ₹${money(i.threshold_price)}</span>` : ""}
+      <button class="drop" data-id="${i.instrument_id}">remove</button>
+    </div>
+  </article>`;
+}
+
+// Market-closed is not staleness: the last price of a finished session is the
+// correct answer until the next open, and saying otherwise teaches people to
+// distrust a good number.
+function freshText(f) {
+  return { LIVE:"live", DELAYED:"a few minutes old", CLOSED:"market closed",
+           STALE:"not current — shown but not scored",
+           UNAVAILABLE:"couldn't reach the market" }[f] || f.toLowerCase();
+}
+
+$("add").onclick = async () => {
+  const symbol = $("sym").value.trim();
+  if (!symbol) return;
+  const t = parseFloat($("thr").value);
+  try {
+    await api("/api/watchlist" + at(), { method:"POST", body:JSON.stringify({
+      symbol, threshold_price: isNaN(t) ? null : t }) });
+    $("sym").value = ""; $("thr").value = "";
+    load();
+  } catch (e) { alertUser(e.message); }
+};
+$("sym").addEventListener("keydown", e => { if (e.key === "Enter") $("add").click(); });
+
+$("clock").onchange = () => {
+  // datetime-local carries no timezone. This is NSE data, so read it as IST.
+  clockValue = $("clock").value + ":00+05:30";
+  load();
+};
+$("latest").onclick = () => {
+  if (span) { $("clock").value = span[1].slice(0,16); clockValue = span[1]; }
+  load();
+};
+
+// Marking as seen is the ONLY thing that moves the watermark. Viewing does
+// not, reloading does not, moving the clock does not — otherwise someone who
+// glances at the screen and gets distracted loses their place silently.
+$("ack").onclick = async () => {
+  const b = $("ack");
+  b.disabled = true; b.textContent = "Marking…";
+  try {
+    const r = await api("/api/acknowledge" + at(),
+      { method:"POST", body:JSON.stringify({ instrument_ids: [] }) });
+    b.textContent = `Marked ${r.acknowledged}`;
+    await load();
+  } catch (e) { alertUser(e.message); }
+  setTimeout(() => { b.disabled = false; b.textContent = "Mark all as seen"; }, 900);
+};
+
+boot();
+</script>
+</body>
+</html>

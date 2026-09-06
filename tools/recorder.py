@@ -237,8 +237,15 @@ def fetch_session() -> None:
                                         "fetched_at": _now_iso()})
                 continue
 
+            # Reset per session. Volume is a DAILY quantity compared against a
+            # daily median; letting it run across the whole fixture window made
+            # every stock look like it was trading at 5x normal by Friday.
             cumulative = 0.0
+            current_session = None
             for ts, row in sub.iterrows():
+                if ts.date() != current_session:
+                    current_session = ts.date()
+                    cumulative = 0.0
                 vol = float(row["Volume"]) if pd.notna(row["Volume"]) else 0.0
                 cumulative += vol
                 _write_jsonl(out_path, {

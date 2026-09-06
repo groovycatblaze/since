@@ -312,3 +312,97 @@ def test_z_is_never_described_as_a_probability():
         assert "sigma" not in low
         assert "probability" not in low
         assert "% likely" not in low
+
+
+# ---------------------------------------------------------------------------
+# Clock authority
+# ---------------------------------------------------------------------------
+
+def test_watermark_applies_when_acknowledged_at_or_after_adding():
+    """The "always new" bug: if added_at and acknowledged_at come from
+    different clocks, added_at is permanently ahead and the watermark is
+    never applied, so the product silently degrades to a plain day-change
+    tracker. is_new must be driven by ordering on ONE clock."""
+    from datetime import datetime, timezone
+
+    added = datetime(2026, 8, 31, 10, 15, tzinfo=timezone.utc)
+
+    # Acknowledged at the same moment the item was added -> not new.
+    assert not (added > added)
+    # Acknowledged later -> not new.
+    assert not (added > added.replace(hour=11))
+    # Added after the last acknowledgement -> genuinely new.
+    assert added.replace(hour=12) > added.replace(hour=11)
+
+
+def test_watermark_price_is_used_once_item_is_not_new():
+    """Once acknowledged, comparison must switch off previous close."""
+    s = score(Observation(price=1030.0, cumulative_volume=2_000_000), CALM,
+              UserContext(watermark_price=1000.0, is_new=False))
+    assert s.comparison == "since you last checked"
+    assert s.pct_change == pytest.approx(3.0, abs=0.05)
+
+
+def test_z_always_shares_the_sign_of_the_price_move():
+    """A rise must never read as a negative z. Subtracting an estimated drift
+    term broke this: 30 days cannot estimate a mean return, so mu was pure
+    noise and could flip the sign of the numerator."""
+    up = score(Observation(price=1030.0), CALM,
+               UserContext(watermark_price=1000.0, elapsed_trading_days=4))
+    down = score(Observation(price=970.0), CALM,
+                 UserContext(watermark_price=1000.0, elapsed_trading_days=4))
+    assert up.z > 0 and up.pct_change > 0
+    assert down.z < 0 and down.pct_change < 0
+
+
+def test_reported_multiple_matches_the_z_magnitude():
+    """The message says "2.3x its normal range" while z reads -2.07. Those are
+    the same quantity and must not be computed two different ways."""
+    s = score(Observation(price=1035.0, cumulative_volume=2_000_000), CALM,
+              UserContext(watermark_price=1000.0))
+    sigma_msg = [r for r in s.reasons if r.type == ReasonType.SIGMA_MOVE][0]
+    import re
+    multiple = float(re.search(r"([\d.]+)x", sigma_msg.message).group(1))
+    assert multiple == pytest.approx(abs(s.z), abs=0.06)
+
+
+# ---------------------------------------------------------------------------
+# Volume is a rate, not a total
+# ---------------------------------------------------------------------------
+
+def test_volume_ratio_is_prorated_by_session_progress():
+    """Heavy trading at 10am must read as heavy, not as 0.15x. Comparing an
+    hour of volume against a full-day median made the signal impossible to
+    trigger before lunch."""
+    morning = score(
+        Observation(price=1005.0, cumulative_volume=300_000, session_fraction=0.15),
+        CALM, UserContext(watermark_price=1000.0))
+    assert morning.volume_ratio > 1.5
+
+
+def test_volume_ratio_means_the_same_thing_at_any_hour():
+    early = score(Observation(price=1005.0, cumulative_volume=200_000,
+                              session_fraction=0.2), CALM,
+                  UserContext(watermark_price=1000.0))
+    late = score(Observation(price=1005.0, cumulative_volume=1_000_000,
+                             session_fraction=1.0), CALM,
+                 UserContext(watermark_price=1000.0))
+    assert early.volume_ratio == pytest.approx(late.volume_ratio, abs=0.05)
+
+
+def test_opening_minutes_do_not_explode_the_ratio():
+    """A near-zero denominator at 09:16 would flag every ordinary open."""
+    s = score(Observation(price=1001.0, cumulative_volume=20_000,
+                          session_fraction=0.002), CALM,
+              UserContext(watermark_price=1000.0))
+    assert s.volume_ratio < 1.0
+
+
+def test_very_large_move_needs_no_volume_confirmation():
+    """A 3-sigma move on ordinary volume is still notable. The volume gate is
+    there to filter thin-book artefacts, not to suppress genuine moves."""
+    s = score(Observation(price=1032.0, cumulative_volume=900_000,
+                          session_fraction=1.0), CALM,
+              UserContext(watermark_price=1000.0))
+    assert abs(s.z) >= 2.5
+    assert s.tier == Tier.NEEDS_ATTENTION
