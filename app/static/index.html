@@ -357,6 +357,10 @@ function sparkline(points, rising) {
 }
 
 function row(i) {
+  // Company names are currently derived from the ticker, so most match it
+  // exactly. Printing "ADANIENT ADANIENT" on every row reads as unfinished, so
+  // the name only appears when it actually adds something.
+  const ticker = i.symbol.replace(".NS", "");
   const dir = i.pct_change > 0 ? "up" : i.pct_change < 0 ? "down" : "";
   const sign = i.pct_change > 0 ? "+" : "";
   const z = i.z == null ? null : Math.abs(i.z);
@@ -380,8 +384,8 @@ function row(i) {
   return `<article class="row ${i.tier}">
     <div>
       <div class="head">
-        <span class="tick">${i.symbol.replace(".NS","")}</span>
-        <span class="co">${i.name}</span>
+        <span class="tick">${ticker}</span>
+        ${i.name && i.name !== ticker ? `<span class="co">${i.name}</span>` : ""}
       </div>
       ${range}
       <ul class="why">${i.reasons.map(r =>
