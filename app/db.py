@@ -177,12 +177,19 @@ def add_item(watchlist_id: int, instrument_id: int,
         return dict(cur.fetchone())
 
 
-def remove_item(watchlist_id: int, instrument_id: int) -> bool:
-    """Removing drops the watchlist row but deliberately LEAVES the watermark.
+def remove_item(watchlist_id: int, instrument_id: int,
+                user_id: int | None = None) -> bool:
+    """Remove from the watchlist and forget where the user left off.
 
-    So that re-adding later does not resurrect months of drift as if the user
-    had been watching all along -- see get_watchlist, which treats an item
-    added after its watermark as new.
+    Dropping the watermark alongside the item is the intuitive reading of
+    "remove": if you stop following something and later start again, you are
+    starting fresh, not resuming a stint you ended months ago. Keeping it meant
+    a re-added stock could silently compare against a price from a period the
+    user was not watching at all.
+
+    Deleting also makes the state resettable from the UI, which matters because
+    the alternative was reaching into the database to demonstrate the product
+    twice.
     """
     with get_cursor() as cur:
         cur.execute(
@@ -190,7 +197,14 @@ def remove_item(watchlist_id: int, instrument_id: int) -> bool:
             "AND instrument_id = %s",
             (watchlist_id, instrument_id),
         )
-        return cur.rowcount > 0
+        removed = cur.rowcount > 0
+        if removed and user_id is not None:
+            cur.execute(
+                "DELETE FROM user_watermarks WHERE user_id = %s "
+                "AND instrument_id = %s",
+                (user_id, instrument_id),
+            )
+        return removed
 
 
 def get_watchlist(watchlist_id: int, user_id: int,

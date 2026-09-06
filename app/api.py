@@ -199,8 +199,8 @@ def post_item(body: AddItem, ctx=Depends(current_user),
 
 @app.delete("/api/watchlist/{instrument_id}", status_code=204)
 def delete_item(instrument_id: int, ctx=Depends(current_user)):
-    _, watchlist_id = ctx
-    if not remove_item(watchlist_id, instrument_id):
+    user_id, watchlist_id = ctx
+    if not remove_item(watchlist_id, instrument_id, user_id):
         raise HTTPException(404, "Not in your watchlist")
 
 
