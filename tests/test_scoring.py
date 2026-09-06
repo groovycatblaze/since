@@ -419,3 +419,19 @@ def test_short_window_does_not_inflate_the_multiple():
                      UserContext(watermark_price=1000.0, elapsed_trading_days=1.0))
     assert minutes.z == pytest.approx(full_day.z, abs=0.01)
     assert abs(minutes.z) < 5.0
+
+
+def test_config_and_scoring_thresholds_agree():
+    """One constant, two definitions, and they drifted: the app scored at
+    sigma_changed=1.0 while every test in this file passed at 1.5, so the
+    calibration figures in the README described a build that was not running.
+    A divergence this quiet needs a test, not care."""
+    from app.config import settings
+    from app.scoring import Thresholds
+
+    d = Thresholds()
+    assert d.sigma_changed == settings.sigma_changed
+    assert d.sigma_needs_attention == settings.sigma_needs_attention
+    assert d.volume_confirm_ratio == settings.volume_confirm_ratio
+    assert d.volume_alone_ratio == settings.volume_alone_ratio
+    assert d.max_sigma_scaling_days == settings.max_sigma_scaling_days

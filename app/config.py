@@ -47,8 +47,11 @@ class Settings(BaseSettings):
 
     # --- attention thresholds -----------------------------------------------
     # Deliberately conservative. If everything is flagged, nothing is.
+    # These MUST match the defaults in scoring.Thresholds. tests/test_scoring.py
+    # asserts they do -- having the same constant defined in two places is how
+    # the app ended up scoring at 1.0 while every test passed at 1.5.
     sigma_needs_attention: float = 2.0
-    sigma_changed: float = 1.0
+    sigma_changed: float = 1.5
     volume_confirm_ratio: float = 1.5
     volume_alone_ratio: float = 3.0
 
