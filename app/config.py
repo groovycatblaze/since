@@ -4,12 +4,24 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
-HISTORY_DIR = DATA_DIR / "history"
-FIXTURES_DIR = DATA_DIR / "fixtures"
+
+# Full recordings are gitignored (tens of MB). data/demo/ holds a trimmed,
+# committed copy so a fresh clone and a deployment both come up working.
+# Prefer a local recording when one exists; fall back to the committed demo
+# set otherwise. Same real NSE bars either way -- only the sampling rate
+# differs, and nothing is fabricated.
+_LOCAL_HISTORY = DATA_DIR / "history"
+_LOCAL_FIXTURES = DATA_DIR / "fixtures"
+_DEMO_HISTORY = DATA_DIR / "demo" / "history"
+_DEMO_FIXTURES = DATA_DIR / "demo" / "fixtures"
+
+HISTORY_DIR = _LOCAL_HISTORY if any(_LOCAL_HISTORY.glob("*.json")) else _DEMO_HISTORY
+FIXTURES_DIR = (_LOCAL_FIXTURES if any(_LOCAL_FIXTURES.glob("session-*.jsonl"))
+                else _DEMO_FIXTURES)
 
 
 class Settings(BaseSettings):
@@ -36,7 +48,7 @@ class Settings(BaseSettings):
     # --- attention thresholds -----------------------------------------------
     # Deliberately conservative. If everything is flagged, nothing is.
     sigma_needs_attention: float = 2.0
-    sigma_changed: float = 1.5
+    sigma_changed: float = 1.0
     volume_confirm_ratio: float = 1.5
     volume_alone_ratio: float = 3.0
 
@@ -44,9 +56,11 @@ class Settings(BaseSettings):
     # the UI falls back to plain absolute change, and says so.
     max_sigma_scaling_days: int = 10
 
-    class Config:
-        env_file = PROJECT_ROOT / ".env"
-        env_file_encoding = "utf-8"
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 settings = Settings()

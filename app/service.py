@@ -41,6 +41,28 @@ THRESHOLDS = Thresholds(
 REFRESH_TTL_SECONDS = 30
 
 _last_refresh: dict[str, datetime] = {}
+
+
+def _needs_refresh(symbol: str, now: datetime) -> bool:
+    """Has this instrument been fetched recently enough to skip?
+
+    The obvious version is `now - last >= TTL`, and it is wrong here. The clock
+    is user-controlled in replay mode, so it moves BACKWARDS as well as
+    forwards. Viewing the latest data and then stepping back four days gives a
+    difference of minus four days, which is not >= 30 seconds, so the cache
+    concluded the data was fresh and served nothing at all. The screen said
+    "no market data available yet" while 233,301 bars sat in memory.
+
+    A cache keyed on elapsed time quietly assumes time is monotonic. Any jump
+    backwards -- a replay clock, a clock correction, a leap second -- breaks
+    that assumption. Comparing the elapsed time as a magnitude does not.
+    """
+    last = _last_refresh.get(symbol)
+    if last is None:
+        return True
+    delta = (now - last).total_seconds()
+    # Refetch on any backwards jump, and on any forward gap past the TTL.
+    return delta < 0 or delta >= REFRESH_TTL_SECONDS
 # One in-flight refresh at a time. Without this, twenty concurrent requests on
 # a cold cache all miss together and fire twenty identical upstream calls --
 # the thundering herd, and the fastest way to get rate-limited by a provider.
@@ -63,11 +85,8 @@ class MarketService:
         information -- it never destroys it.
         """
         with _refresh_lock:
-            stale = [
-                s for s in symbol_to_instrument
-                if (now - _last_refresh.get(s, datetime.min.replace(
-                    tzinfo=timezone.utc))).total_seconds() >= REFRESH_TTL_SECONDS
-            ]
+            stale = [s for s in symbol_to_instrument
+                     if _needs_refresh(s, now)]
             if not stale:
                 return {}
 

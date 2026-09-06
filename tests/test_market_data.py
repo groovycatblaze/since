@@ -229,3 +229,30 @@ def test_mangled_timezone_offset_is_repaired():
 
     assert repair("2026-09-04T15:24:00 05:30") == repair("2026-09-04T15:24:00+05:30")
     assert repair("2026-09-04T15:24:00").tzinfo is None
+
+
+# ---------------------------------------------------------------------------
+# The refresh cache must not assume time is monotonic
+# ---------------------------------------------------------------------------
+
+def test_refresh_cache_handles_a_backwards_clock():
+    """With a user-controlled clock, time moves both ways. `now - last >= TTL`
+    is False for a negative delta, so stepping the clock BACK made the cache
+    report stale-in-the-future data as fresh and serve nothing."""
+    from app.service import _last_refresh, _needs_refresh
+
+    sym = "TEST.NS"
+    later = d(2026, 9, 4, 15, 0)
+    earlier = d(2026, 8, 31, 10, 0)
+
+    _last_refresh.clear()
+    assert _needs_refresh(sym, later) is True      # never fetched
+    _last_refresh[sym] = later
+
+    # Immediately again: cached, correct.
+    assert _needs_refresh(sym, later) is False
+    # Forward past the TTL: refetch.
+    assert _needs_refresh(sym, later + timedelta(seconds=31)) is True
+    # BACKWARDS: must refetch. This is the bug.
+    assert _needs_refresh(sym, earlier) is True
+    _last_refresh.clear()
