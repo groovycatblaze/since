@@ -71,7 +71,9 @@ async def lifespan(app: FastAPI):
     yield
     close_pool()
 
+
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
 app = FastAPI(title="Since", version="1.0", lifespan=lifespan)
 
 # The frontend runs on a different port in development. Locked to localhost
@@ -138,16 +140,19 @@ def clock(at: str | None = Query(default=None)) -> datetime:
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
 @app.get("/", include_in_schema=False)
 def index():
     """The frontend is one static file served by the API.
 
     No bundler, no node_modules, no second dev server, no CORS in production.
     For a home screen that is one list with three sections, a build toolchain
-    would be weight without a job -- and the whole product deploys as a single
-    artifact.
+    would be weight without a job -- and it means the whole product deploys as
+    a single artifact.
     """
     return FileResponse(STATIC_DIR / "index.html")
+
+
 @app.get("/api/health")
 def get_health():
     try:
@@ -159,7 +164,10 @@ def get_health():
 
 @app.get("/api/instruments")
 def get_instruments(q: str = Query(default="", max_length=32)):
-    return {"results": search_instruments(q) if q else search_instruments("")}
+    # 200, not the default 10: with an empty query this populates the whole
+    # datalist, and a dropdown showing 10 of 33 instruments looks like the
+    # other 23 do not exist.
+    return {"results": search_instruments(q, limit=200)}
 
 
 @app.get("/api/digest")

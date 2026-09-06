@@ -139,11 +139,16 @@ class Thresholds:
     volume_confirm_ratio: float = 1.5
     volume_alone_ratio: float = 3.0
     max_sigma_scaling_days: float = 10.0
-    # Below a quarter of a trading day, intraday microstructure noise dominates
-    # and scaling a DAILY sigma down by sqrt(t) stops being meaningful. Without
-    # this floor, a user who acknowledges and refreshes a minute later would
-    # see ordinary bid-ask noise scored as a dramatic event.
-    min_elapsed_days: float = 0.25
+    # Floor at ONE FULL TRADING DAY. sigma here is a daily estimate, and
+    # scaling it below a day assumes volatility accrues evenly through the
+    # session -- it does not, it is U-shaped like volume. At 0.25 days the
+    # sqrt(t) divisor is 0.5, which DOUBLES every z-score and turned a genuine
+    # 5.3x move into a reported 10.2x.
+    #
+    # Flooring at 1.0 makes short windows conservative rather than dramatic.
+    # Given the choice between understating a real move and crying wolf on an
+    # ordinary one, a product whose job is to reduce noise should understate.
+    min_elapsed_days: float = 1.0
     # A move this large with no corresponding volume is far more likely to be a
     # split or bonus than a genuine 25% repricing.
     corporate_action_log_return: float = 0.25

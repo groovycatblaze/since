@@ -406,3 +406,16 @@ def test_very_large_move_needs_no_volume_confirmation():
               UserContext(watermark_price=1000.0))
     assert abs(s.z) >= 2.5
     assert s.tier == Tier.NEEDS_ATTENTION
+
+
+def test_short_window_does_not_inflate_the_multiple():
+    """sigma is a DAILY estimate. Scaling it below one day assumes volatility
+    accrues evenly through a session, which it does not. At a 0.25-day floor
+    the sqrt(t) divisor was 0.5, doubling every z and reporting a genuine 5.3x
+    move as 10.2x."""
+    minutes = score(Observation(price=1044.0, cumulative_volume=2_000_000), CALM,
+                    UserContext(watermark_price=1000.0, elapsed_trading_days=0.01))
+    full_day = score(Observation(price=1044.0, cumulative_volume=2_000_000), CALM,
+                     UserContext(watermark_price=1000.0, elapsed_trading_days=1.0))
+    assert minutes.z == pytest.approx(full_day.z, abs=0.01)
+    assert abs(minutes.z) < 5.0
