@@ -221,6 +221,7 @@
       <input type="datetime-local" id="clock" step="60" aria-label="Viewing time">
       <button id="latest">Latest</button>
       <button class="go" id="ack">Mark all as seen</button>
+      <button id="livebtn" style="display:none">Use live market</button>
     </div>
   </div>
   <p class="note" id="note"></p>
@@ -230,7 +231,7 @@
 
 <script>
 const HDRS = { "Content-Type":"application/json", "X-User":"demo@since.app" };
-let span = null, clockValue = null;
+let span = null, clockValue = null, liveMode = false;
 
 const $ = id => document.getElementById(id);
 const money = n => n == null ? "—"
@@ -253,6 +254,9 @@ async function api(path, opts = {}) {
 // The '+' in a +05:30 offset decodes server-side as a space, so the clock
 // parameter has to be encoded.
 const at = () => clockValue ? "?at=" + encodeURIComponent(clockValue) : "";
+// Live mode ignores the clock by design: asking for live data "as of" a past
+// moment would be asking the system to lie about the present.
+const digestQuery = () => liveMode ? "?live=true" : at();
 
 async function boot() {
   try {
@@ -276,14 +280,39 @@ async function boot() {
       $("latest").style.display = "none";
       $("note").textContent = "Live prices from the NSE.";
     }
+    try {
+      const market = await api("/api/market/status");
+      if (market.market_open && market.live_available) {
+        $("livebtn").style.display = "";
+      }
+    } catch { /* the toggle is optional; never block the page on it */ }
+
     await load();
   } catch (e) {
     alertUser("The server isn't responding. Start it with: uvicorn app.api:app --reload");
   }
 }
 
+// Only offered while the NSE is open, because a "live market" button that
+// returns Friday's close is a worse experience than no button.
+function setLive(on) {
+  liveMode = on;
+  $("livebtn").textContent = on ? "Back to recorded data" : "Use live market";
+  $("clock").disabled = on;
+  $("latest").disabled = on;
+  $("mode").textContent = on ? "live NSE prices" : "replaying recorded NSE data";
+  $("note").textContent = on
+    ? "Live prices from the NSE. Sparklines and previous-close comparisons are "
+      + "thinner here: price history builds up only from the moment this "
+      + "instance starts fetching, and the volatility baselines were computed "
+      + "from data recorded up to 4 September."
+    : `Every price here was recorded from the NSE between ${when(span[0])} and `
+      + `${when(span[1])}. Nothing is simulated — move the clock to replay it.`;
+  load();
+}
+
 async function load() {
-  try { alertUser(""); render(await api("/api/digest" + at())); }
+  try { alertUser(""); render(await api("/api/digest" + digestQuery())); }
   catch (e) { alertUser("Couldn't load your watchlist. " + e.message); }
 }
 
@@ -415,6 +444,8 @@ function freshText(f) {
            STALE:"not current — shown but not scored",
            UNAVAILABLE:"couldn't reach the market" }[f] || f.toLowerCase();
 }
+
+$("livebtn").onclick = () => setLive(!liveMode);
 
 $("add").onclick = async () => {
   const symbol = $("sym").value.trim();

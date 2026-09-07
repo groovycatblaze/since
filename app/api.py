@@ -59,15 +59,19 @@ async def lifespan(app: FastAPI):
     covered = calendar.covered_range
     log.info("trading calendar covers %s", covered)
 
+    # Both are built at startup so a reviewer can switch per request without a
+    # redeploy. Replay is the default: it is deterministic, works offline, and
+    # does not depend on an unofficial API that rate-limits cloud IPs.
+    live_provider = LiveProvider()
     if settings.data_mode.upper() == "REPLAY":
         provider = ReplayProvider(FIXTURES_DIR)
         log.info("REPLAY mode: %d symbols, span %s",
                  len(provider.symbols), provider.span)
     else:
-        provider = LiveProvider()
+        provider = live_provider
         log.info("LIVE mode: yfinance")
 
-    _service = MarketService(provider, calendar)
+    _service = MarketService(provider, calendar, live_provider)
     yield
     close_pool()
 
@@ -173,7 +177,8 @@ def get_instruments(q: str = Query(default="", max_length=32)):
 
 
 @app.get("/api/digest")
-def get_digest(ctx=Depends(current_user), now: datetime = Depends(clock)):
+def get_digest(ctx=Depends(current_user), now: datetime = Depends(clock),
+               live: bool = Query(default=False)):
     """The main read. Everything the home screen needs, in one call.
 
     One request rather than one-per-stock: a 20-stock watchlist making 20
@@ -181,7 +186,14 @@ def get_digest(ctx=Depends(current_user), now: datetime = Depends(clock)):
     makes the tier counts inconsistent while they trickle in.
     """
     user_id, watchlist_id = ctx
-    return _service.build_digest(user_id, watchlist_id, now)
+    # ?live=true fetches the real market instead of replaying. The clock is
+    # ignored in that case -- asking for live data "as of" a past moment would
+    # be a request for the system to lie about the present.
+    return _service.build_digest(
+        user_id, watchlist_id,
+        datetime.now(timezone.utc) if live else now,
+        live=live,
+    )
 
 
 @app.post("/api/watchlist", status_code=201)
@@ -235,6 +247,19 @@ def post_acknowledge(body: AckRequest, ctx=Depends(current_user),
     updated = acknowledge(user_id, entries)
     return {"acknowledged": len(entries), "advanced": updated,
             "at": now.isoformat()}
+
+
+@app.get("/api/market/status")
+def market_status():
+    """Is the NSE open right now? The UI uses this to offer live mode only
+    when there is live data to show."""
+    now = datetime.now(timezone.utc)
+    cal = _service.calendar
+    return {
+        "market_open": cal.is_market_open(now),
+        "now_ist": now.astimezone(IST).isoformat(),
+        "live_available": _service.live_provider is not None,
+    }
 
 
 @app.get("/api/demo/span")

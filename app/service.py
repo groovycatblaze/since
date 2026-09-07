@@ -70,14 +70,30 @@ _refresh_lock = threading.Lock()
 
 
 class MarketService:
-    def __init__(self, provider: Provider, calendar: TradingCalendar):
+    """Holds both providers so a caller can choose per request.
+
+    Replay is the default because it is deterministic and offline. Live is
+    available so a reviewer opening this during trading hours can see it
+    against the actual market -- but it is opt-in, because an unofficial
+    provider that rate-limits cloud IPs is not something a demo should depend
+    on by default.
+    """
+
+    def __init__(self, provider: Provider, calendar: TradingCalendar,
+                 live_provider: Provider | None = None):
         self.provider = provider
+        self.live_provider = live_provider
         self.calendar = calendar
+
+    def _pick(self, live: bool) -> Provider:
+        if live and self.live_provider is not None:
+            return self.live_provider
+        return self.provider
 
     # -- shared half --------------------------------------------------------
 
     def refresh(self, symbol_to_instrument: dict[str, int],
-                now: datetime) -> dict[str, Quote]:
+                now: datetime, live: bool = False) -> dict[str, Quote]:
         """Fetch quotes for these instruments and persist them.
 
         Returns whatever the provider gave, including failures. Callers fall
@@ -85,13 +101,14 @@ class MarketService:
         information -- it never destroys it.
         """
         with _refresh_lock:
+            prefix = "live:" if live else "replay:"
             stale = [s for s in symbol_to_instrument
-                     if _needs_refresh(s, now)]
+                     if _needs_refresh(prefix + s, now)]
             if not stale:
                 return {}
 
             try:
-                quotes = self.provider.fetch(stale, now)
+                quotes = self._pick(live).fetch(stale, now)
             except Exception as exc:                      # noqa: BLE001
                 # Defence in depth. Providers promise not to raise; this
                 # ensures a misbehaving one degrades the request rather than
@@ -113,7 +130,7 @@ class MarketService:
                     "cumulative_volume": q.cumulative_volume,
                     "session_date": q.exchange_time.astimezone(IST).date(),
                 })
-                _last_refresh[symbol] = now
+                _last_refresh[prefix + symbol] = now
 
             if rows:
                 record_observations(rows)
@@ -122,20 +139,20 @@ class MarketService:
     # -- personal half ------------------------------------------------------
 
     def build_digest(self, user_id: int, watchlist_id: int,
-                     now: datetime) -> dict:
+                     now: datetime, live: bool = False) -> dict:
         rows = get_watchlist(watchlist_id, user_id, now)
         if not rows:
             return {"as_of": now.isoformat(), "tiers": _empty_tiers(),
                     "counts": {t.value: 0 for t in Tier}, "total": 0}
 
         symbol_to_instrument = {r["symbol"]: r["instrument_id"] for r in rows}
-        self.refresh(symbol_to_instrument, now)
+        self.refresh(symbol_to_instrument, now, live)
 
         # Re-read after refresh so we score the freshest stored observation
         # rather than the provider response, keeping one source of truth.
         rows = get_watchlist(watchlist_id, user_id, now)
 
-        items = [self._score_row(r, now) for r in rows]
+        items = [self._score_row(r, now, live) for r in rows]
 
         tiers = _empty_tiers()
         for item in items:
@@ -155,7 +172,8 @@ class MarketService:
             "total": len(items),
         }
 
-    def _score_row(self, row: dict, now: datetime) -> dict:
+    def _score_row(self, row: dict, now: datetime,
+                   live: bool = False) -> dict:
         symbol = row["symbol"]
 
         if row["price"] is None or row["prev_close"] is None:
@@ -213,7 +231,7 @@ class MarketService:
         # they were away for is what makes "memory" visible instead of being
         # something a reviewer has to read about.
         spark_from = acknowledged_at or row["added_at"]
-        spark = self.provider.history(symbol, spark_from, now)
+        spark = self._pick(live).history(symbol, spark_from, now)
 
         return _item(row, score(obs, baseline, user, THRESHOLDS), symbol,
                      spark=spark)
